@@ -1,8 +1,9 @@
 package baidu
 
 import (
-	"github.com/songquanpeng/one-api/relay/model"
 	"time"
+
+	"github.com/songquanpeng/one-api/relay/model"
 )
 
 type ChatResponse struct {
@@ -12,6 +13,7 @@ type ChatResponse struct {
 	Result           string      `json:"result"`
 	IsTruncated      bool        `json:"is_truncated"`
 	NeedClearHistory bool        `json:"need_clear_history"`
+	FinishReason     string      `json:"finish_reason"`
 	Usage            model.Usage `json:"usage"`
 	Error
 }

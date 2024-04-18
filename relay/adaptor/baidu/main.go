@@ -5,6 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/songquanpeng/one-api/common"
 	"github.com/songquanpeng/one-api/common/logger"
@@ -12,11 +18,6 @@ import (
 	"github.com/songquanpeng/one-api/relay/client"
 	"github.com/songquanpeng/one-api/relay/constant"
 	"github.com/songquanpeng/one-api/relay/model"
-	"io"
-	"net/http"
-	"strings"
-	"sync"
-	"time"
 )
 
 // https://cloud.baidu.com/doc/WENXINWORKSHOP/s/flfmc9do2
@@ -83,7 +84,16 @@ func responseBaidu2OpenAI(response *ChatResponse) *openai.TextResponse {
 			Role:    "assistant",
 			Content: response.Result,
 		},
-		FinishReason: "stop",
+	}
+	if response.FinishReason == "" {
+		if response.IsTruncated {
+			choice.FinishReason = constant.LengthFinishReason
+		} else {
+			choice.FinishReason = constant.StopFinishReason
+		}
+
+	} else {
+		choice.FinishReason = response.FinishReason
 	}
 	fullTextResponse := openai.TextResponse{
 		Id:      response.Id,
@@ -98,9 +108,21 @@ func responseBaidu2OpenAI(response *ChatResponse) *openai.TextResponse {
 func streamResponseBaidu2OpenAI(baiduResponse *ChatStreamResponse) *openai.ChatCompletionsStreamResponse {
 	var choice openai.ChatCompletionsStreamResponseChoice
 	choice.Delta.Content = baiduResponse.Result
-	if baiduResponse.IsEnd {
-		choice.FinishReason = &constant.StopFinishReason
+
+	if baiduResponse.FinishReason == "" {
+		if baiduResponse.IsEnd {
+			if baiduResponse.IsTruncated {
+				choice.FinishReason = &constant.LengthFinishReason
+			} else {
+				choice.FinishReason = &constant.StopFinishReason
+			}
+		} else {
+			choice.FinishReason = &constant.NormalFinishReason
+		}
+	} else {
+		choice.FinishReason = &baiduResponse.FinishReason
 	}
+	// choice.FinishReason = &baiduResponse.FinishReason
 	response := openai.ChatCompletionsStreamResponse{
 		Id:      baiduResponse.Id,
 		Object:  "chat.completion.chunk",
@@ -170,6 +192,7 @@ func StreamHandler(c *gin.Context, resp *http.Response) (*model.ErrorWithStatusC
 			err := json.Unmarshal([]byte(data), &baiduResponse)
 			if err != nil {
 				logger.SysError("error unmarshalling stream response: " + err.Error())
+				logger.SysError("百度异常: " + data)
 				return true
 			}
 			if baiduResponse.Usage.TotalTokens != 0 {
@@ -181,6 +204,7 @@ func StreamHandler(c *gin.Context, resp *http.Response) (*model.ErrorWithStatusC
 			jsonResponse, err := json.Marshal(response)
 			if err != nil {
 				logger.SysError("error marshalling stream response: " + err.Error())
+				logger.SysError("百度异常: " + data)
 				return true
 			}
 			c.Render(-1, common.CustomEvent{Data: "data: " + string(jsonResponse)})
