@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 	"github.com/songquanpeng/one-api/common"
 	"github.com/songquanpeng/one-api/common/config"
@@ -16,8 +19,6 @@ import (
 	"github.com/songquanpeng/one-api/relay/controller"
 	"github.com/songquanpeng/one-api/relay/model"
 	"github.com/songquanpeng/one-api/relay/relaymode"
-	"io"
-	"net/http"
 )
 
 // https://platform.openai.com/docs/api-reference/chat
@@ -116,7 +117,10 @@ func shouldRetry(c *gin.Context, statusCode int) bool {
 }
 
 func processChannelRelayError(ctx context.Context, channelId int, channelName string, err *model.ErrorWithStatusCode) {
-	logger.Errorf(ctx, "relay error (channel #%d): %s", channelId, err.Message)
+	// logger.Errorf(ctx, "relay error (channel #%d): %s", channelId, err.Message)
+	logger.Errorf(ctx, "relay error (channel #%d): statusCode:%d,errorType:%s,错误码:%s,错误提示:%s", channelId, err.StatusCode, err.Type, err.Code, err.Message)
+	logger.Errorf(ctx, "relay error (channel #%d): err.Error: 错误码Code:%s,错误提示Message:%s", channelId, err.Error.Code, err.Error.Message)
+
 	// https://platform.openai.com/docs/guides/error-codes/api-errors
 	if monitor.ShouldDisableChannel(&err.Error, err.StatusCode) {
 		monitor.DisableChannel(channelId, channelName, err.Message)
